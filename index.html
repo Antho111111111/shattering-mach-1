@@ -1,0 +1,938 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Shattering Mach 1: The Engineering Behind the Bell X-1</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet" />
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            display: ['Space Grotesk', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            space: '#070b14',
+            panel: '#0d1424',
+            x1orange: '#ff5722',
+            x1amber: '#ff9800',
+            shockcyan: '#38bdf8',
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    body {
+      background-color: #070b14;
+      color: #e2e8f0;
+      overflow-x: hidden;
+    }
+
+    .aero-grid {
+      background-size: 48px 48px;
+      background-image: 
+        linear-gradient(to right, rgba(56, 189, 248, 0.04) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(56, 189, 248, 0.04) 1px, transparent 1px);
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      background: transparent;
+      cursor: pointer;
+    }
+    input[type="range"]::-webkit-slider-runnable-track {
+      height: 6px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #38bdf8 0%, #38bdf8 47%, #ff5722 53%, #ff9800 100%);
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      margin-top: -7px;
+      background-color: #ffffff;
+      border: 3px solid #ff5722;
+      height: 20px;
+      width: 20px;
+      border-radius: 50%;
+      box-shadow: 0 0 12px rgba(255, 87, 34, 0.8);
+      transition: transform 0.15s ease;
+    }
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.15);
+    }
+
+    .hotspot-pulse {
+      animation: pulseRing 2.4s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+    }
+    @keyframes pulseRing {
+      0% { transform: scale(0.85); opacity: 0.9; }
+      70% { transform: scale(1.75); opacity: 0; }
+      100% { transform: scale(1.75); opacity: 0; }
+    }
+
+    .timeline-line::before {
+      content: '';
+      position: absolute;
+      left: 23px;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: linear-gradient(180deg, rgba(56, 189, 248, 0.2), #ff5722 50%, rgba(56, 189, 248, 0.2));
+    }
+
+    .reveal {
+      opacity: 0;
+      transform: translateY(24px);
+      transition: opacity 0.7s ease-out, transform 0.7s ease-out;
+    }
+    .reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  </style>
+</head>
+<body class="aero-grid antialiased selection:bg-x1orange selection:text-white">
+
+  <!-- Sticky Flight Telemetry & Progress Bar -->
+  <header class="fixed top-0 left-0 right-0 z-50 bg-space/85 backdrop-blur-md border-b border-slate-800/80">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between text-xs font-mono">
+      <div class="flex items-center gap-3">
+        <span class="inline-block w-2.5 h-2.5 rounded-full bg-x1orange animate-pulse"></span>
+        <span class="text-slate-300 font-semibold tracking-wider">AnAe111 — Introduction to Aeronautics</span>
+        <span class="hidden md:inline text-slate-600">|</span>
+        <span class="hidden md:inline text-slate-400">Bell X-1</span>
+      </div>
+
+      <!-- Scroll-Linked Altitude & Mach Readout -->
+      <div class="flex items-center gap-4 sm:gap-6">
+        <div class="flex items-center gap-1.5">
+          <span class="text-slate-500 uppercase">Altitude:</span>
+          <span id="hud-alt" class="text-shockcyan font-bold w-20 text-right">0 m</span>
+        </div>
+        <div class="flex items-center gap-1.5">
+          <span class="text-slate-500 uppercase">Speed:</span>
+          <span id="hud-mach" class="text-x1orange font-bold w-20 text-right">Mach 0.00</span>
+        </div>
+        <div class="hidden sm:flex items-center gap-1.5">
+          <span id="hud-phase" class="px-2 py-0.5 rounded bg-slate-800/90 text-slate-300 border border-slate-700/70">01 · Introduction</span>
+        </div>
+      </div>
+    </div>
+    <!-- Progress Bar -->
+    <div class="w-full h-[2px] bg-slate-900">
+      <div id="scroll-progress" class="h-full bg-gradient-to-r from-shockcyan via-x1orange to-x1amber w-0 transition-all duration-75"></div>
+    </div>
+  </header>
+
+  <!-- SECTION 1: HERO -->
+  <section id="sec-intro" data-phase="01 · Introduction" class="relative min-h-screen flex flex-col justify-center pt-20 pb-16 px-4 sm:px-6 overflow-hidden">
+    <div class="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[620px] h-[340px] bg-x1orange/10 blur-[130px] rounded-full pointer-events-none"></div>
+
+    <div class="max-w-5xl mx-auto w-full relative z-10">
+      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-x1orange/10 border border-x1orange/30 text-x1orange font-mono text-xs mb-6">
+        <span>October 14, 1947 · Muroc Dry Lake, California</span>
+      </div>
+
+      <h1 class="font-display text-4xl sm:text-6xl lg:text-7xl font-bold tracking-tight text-white leading-[1.08] mb-6">
+        Shattering <span class="text-transparent bg-clip-text bg-gradient-to-r from-x1orange to-x1amber">Mach 1</span>:<br />
+        The Engineering Behind the Bell X-1
+      </h1>
+
+      <p class="text-slate-300 text-lg sm:text-xl max-w-2xl leading-relaxed mb-12 font-light">
+        How a bullet-shaped experimental rocket aircraft, a movable horizontal tailplane, and a daring high-altitude drop launch turned the dreaded "sound barrier" into a manageable frontier of aerospace engineering.
+      </p>
+
+      <!-- Hero Custom SVG: Bell X-1 Silhouette with Shockwave Cone -->
+      <div class="relative w-full max-w-4xl mx-auto my-2 p-6 sm:p-8 rounded-2xl bg-panel/70 border border-slate-800/90 backdrop-blur-sm overflow-hidden">
+        <svg viewBox="0 0 800 220" class="w-full h-auto" aria-label="Bell X-1 breaking the sound barrier">
+          <defs>
+            <linearGradient id="machConeGrad" x1="0%" y1="50%" x2="100%" y2="50%">
+              <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.45" />
+              <stop offset="100%" stop-color="#38bdf8" stop-opacity="0.0" />
+            </linearGradient>
+            <linearGradient id="exhaustGrad" x1="100%" y1="50%" x2="0%" y2="50%">
+              <stop offset="0%" stop-color="#ffffff" stop-opacity="0.95" />
+              <stop offset="30%" stop-color="#ff9800" stop-opacity="0.85" />
+              <stop offset="70%" stop-color="#ff5722" stop-opacity="0.45" />
+              <stop offset="100%" stop-color="#ff5722" stop-opacity="0" />
+            </linearGradient>
+          </defs>
+
+          <!-- Supersonic Mach Cone -->
+          <polygon points="595,110 110,12 110,208" fill="url(#machConeGrad)" />
+          <line x1="595" y1="110" x2="110" y2="12" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="6 4" opacity="0.8" />
+          <line x1="595" y1="110" x2="110" y2="208" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="6 4" opacity="0.8" />
+
+          <!-- Rocket Exhaust Plume -->
+          <polygon points="275,103 40,94 75,110 40,126 275,117" fill="url(#exhaustGrad)" />
+          <polygon points="275,107 150,104 170,110 150,116 275,113" fill="#fff7ed" opacity="0.9" />
+
+          <!-- Bell X-1 Fuselage (.50-Caliber Bullet Profile) -->
+          <path d="M 275,97 L 410,92 Q 520,92 595,110 Q 520,128 410,128 L 275,123 Z" fill="#ff5722" stroke="#ffab91" stroke-width="1.2" />
+          <!-- Cockpit Canopy Flush -->
+          <path d="M 455,93 Q 495,93 525,99 L 465,100 Z" fill="#0f172a" stroke="#38bdf8" stroke-width="1" />
+          <!-- Vertical Tail Fin -->
+          <polygon points="282,97 268,48 308,48 342,95" fill="#e64a19" stroke="#ffab91" stroke-width="1" />
+          <!-- All-Moving Horizontal Stabilizer -->
+          <polygon points="278,107 254,104 254,114 298,113" fill="#bf360c" stroke="#ffccbc" stroke-width="1" />
+          <!-- Thin Mid-Fuselage Wing -->
+          <polygon points="375,112 355,142 395,142 435,112" fill="#d84315" stroke="#ffab91" stroke-width="1" />
+          <!-- Nose Pitot Boom -->
+          <line x1="595" y1="110" x2="645" y2="110" stroke="#e2e8f0" stroke-width="2" />
+
+          <!-- Labels -->
+          <text x="655" y="114" fill="#38bdf8" font-family="JetBrains Mono" font-size="11">SHOCKWAVE FRONT (M &gt; 1)</text>
+          <text x="115" y="32" fill="#38bdf8" font-family="JetBrains Mono" font-size="10" opacity="0.85">MACH CONE ANGLE μ = arcsin(1/M)</text>
+        </svg>
+      </div>
+
+      <div class="mt-10 flex items-center gap-3 text-slate-400 text-xs font-mono">
+        <span class="animate-bounce inline-block text-x1orange">↓</span>
+        <span>Scroll down to follow the flight profile and explore the physics</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 2: PERSONAL MOTIVATION -->
+  <section id="sec-origin" data-phase="02 · Personal Choice" class="py-24 px-4 sm:px-6 border-t border-slate-800/70 bg-slate-950/40">
+    <div class="max-w-4xl mx-auto reveal">
+      <div class="flex items-center gap-3 font-mono text-xs text-shockcyan uppercase tracking-widest mb-3">
+        <span>02 // Why I Chose the Bell X-1</span>
+      </div>
+      <h2 class="font-display text-3xl sm:text-4xl font-bold text-white mb-8">
+        From a Classroom Sonic Boom to Supersonic Engineering
+      </h2>
+
+      <div class="relative p-6 sm:p-10 rounded-2xl bg-gradient-to-br from-panel to-slate-900/90 border border-slate-800 shadow-2xl">
+        <div class="space-y-5 text-slate-200 text-base sm:text-lg leading-relaxed">
+          <p>
+            My interest in supersonic flight began on a Wednesday afternoon while I was attending classes for my <strong class="text-white font-semibold">Brevet d’Initiation Aéronautique (BIA)</strong>. Our instructor was explaining the fundamentals of aircraft thrust when a military jet flew past not far from our classroom at supersonic speed.
+          </p>
+          <p>
+            Suddenly, a loud, sharp boom rattled the windows. At first, none of us understood what had just happened—until our teacher explained that the aircraft had exceeded the speed of sound, sending a pressure shockwave down to the ground.
+          </p>
+          <p class="text-slate-300">
+            Experiencing that sonic boom firsthand turned an abstract physics lesson into something unforgettable. It pushed me to ask a deeper engineering question: <span class="text-x1orange font-medium">what actually happens to airflow at Mach 1, and how did engineers design the very first aircraft capable of surviving it?</span>
+          </p>
+        </div>
+
+        <div class="mt-8 pt-6 border-t border-slate-800 flex flex-wrap items-center justify-between gap-4 text-xs font-mono text-slate-400">
+          <span>Brevet d'Initiation Aéronautique (BIA)</span>
+          <span class="text-shockcyan">Phenomenon: Acoustic Shockwave (Mach &gt; 1)</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 3: INTERACTIVE MACH CONE & SONIC BOOM SIMULATOR -->
+  <section id="sec-physics" data-phase="03 · Sonic Boom Physics" class="py-24 px-4 sm:px-6 border-t border-slate-800/70">
+    <div class="max-w-5xl mx-auto reveal">
+      <div class="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
+        <div>
+          <div class="font-mono text-xs text-x1orange uppercase tracking-widest mb-2">
+            03 // Interactive Physics Simulation
+          </div>
+          <h2 class="font-display text-3xl sm:text-4xl font-bold text-white">
+            The Physics of Breaking the Sound Barrier
+          </h2>
+        </div>
+        <p class="text-slate-400 text-sm max-w-md">
+          Drag the Mach slider past <strong class="text-white">Mach 1.00</strong> to observe how pressure waves coalesce into a Mach cone, or trigger the sonic boom sound directly.
+        </p>
+      </div>
+
+      <!-- Simulator Card -->
+      <div class="rounded-2xl bg-panel border border-slate-800 overflow-hidden shadow-2xl">
+        <!-- Controls Header -->
+        <div class="p-5 sm:p-6 bg-slate-900/90 border-b border-slate-800 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-6">
+          <div class="flex-1">
+            <div class="flex items-center justify-between mb-2 font-mono text-sm">
+              <span class="text-slate-300">Airspeed: <strong id="sim-mach-val" class="text-shockcyan text-lg">Mach 0.85</strong></span>
+              <span id="sim-regime-badge" class="px-2.5 py-0.5 rounded text-xs font-bold bg-sky-500/20 text-sky-300 border border-sky-500/40">SUBSONIC REGIME</span>
+            </div>
+            <input id="mach-slider" type="range" min="0.40" max="2.00" step="0.01" value="0.85" class="w-full" />
+            <div class="flex justify-between text-[11px] font-mono text-slate-500 mt-1.5">
+              <span>Mach 0.40</span>
+              <span class="text-x1orange font-semibold">Mach 1.00 (Sound Barrier)</span>
+              <span>Mach 2.00</span>
+            </div>
+          </div>
+
+          <div class="flex flex-wrap items-center gap-3 shrink-0">
+            <div class="px-3.5 py-2 rounded-lg bg-slate-950 border border-slate-800 font-mono text-xs">
+              <div class="text-slate-500">Mach Angle (μ)</div>
+              <div id="sim-angle-val" class="text-white font-bold text-sm mt-0.5">None (Subsonic)</div>
+            </div>
+
+            <button id="play-boom-btn" type="button" class="px-4 py-2.5 rounded-lg bg-x1orange hover:bg-orange-500 active:scale-95 text-white font-mono text-xs font-semibold transition flex items-center gap-2 shadow-lg shadow-x1orange/25">
+              <span aria-hidden="true">🔊</span>
+              <span>Hear Sonic Boom</span>
+            </button>
+
+            <button id="audio-toggle-btn" type="button" class="px-3.5 py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-mono text-xs transition flex items-center gap-2" title="Automatically play boom when crossing Mach 1.00">
+              <span id="audio-status-dot" class="w-2 h-2 rounded-full bg-emerald-400"></span>
+              <span id="audio-toggle-text">Auto-Boom: ON</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Live Physics Canvas -->
+        <div class="relative w-full h-[320px] sm:h-[360px] bg-[#060a12]">
+          <canvas id="shockwave-canvas" class="w-full h-full block"></canvas>
+          <div class="absolute bottom-3 left-4 right-4 flex flex-wrap justify-between gap-2 text-[11px] font-mono text-slate-400 pointer-events-none">
+            <span>Formula: sin(μ) = c / v = 1 / M</span>
+            <span id="sim-explanation" class="text-slate-300">Pressure waves travel ahead of the aircraft; no sonic boom occurs.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 4: HISTORICAL CONTEXT & MISSION PROFILE -->
+  <section id="sec-history" data-phase="04 · Historical Context" class="py-24 px-4 sm:px-6 border-t border-slate-800/70 bg-slate-950/40">
+    <div class="max-w-5xl mx-auto reveal">
+      <div class="font-mono text-xs text-shockcyan uppercase tracking-widest mb-2">
+        04 // Historical Context & Flight Sequence
+      </div>
+      <h2 class="font-display text-3xl sm:text-4xl font-bold text-white mb-4">
+        Overcoming the Transonic Crisis
+      </h2>
+      <p class="text-slate-300 max-w-3xl text-base sm:text-lg leading-relaxed mb-12">
+        During World War II, high-speed fighters diving toward Mach 1 suffered violent buffeting, nose-down pitching (<strong class="text-white">Mach tuck</strong>), and frozen flight controls. Because early wind tunnels "choked" near Mach 1, NACA, the U.S. Army Air Forces, and Bell Aircraft built the X-1 as a manned flying laboratory.
+      </p>
+
+      <!-- Vertical Flight Profile Timeline -->
+      <div class="relative timeline-line space-y-8 pl-14">
+        <!-- Step 1 -->
+        <div class="relative p-6 rounded-xl bg-panel border border-slate-800 hover:border-slate-700 transition">
+          <div class="absolute -left-[43px] top-6 w-6 h-6 rounded-full bg-space border-2 border-shockcyan flex items-center justify-center text-[10px] font-mono font-bold text-shockcyan">1</div>
+          <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+            <h3 class="font-display text-xl font-bold text-white">Captive Climb Under a B-29 Superfortress</h3>
+            <span class="font-mono text-xs px-2.5 py-1 rounded bg-slate-900 text-shockcyan border border-slate-800">Altitude: 0 → 7,000 m</span>
+          </div>
+          <p class="text-slate-300 text-sm sm:text-base leading-relaxed">
+            Because the XLR11 rocket engine carried only 2.5 minutes of propellant, the Bell X-1 did not take off from a runway. Instead, it was carried aloft inside the modified bomb bay of a Boeing B-29 mothership to conserve fuel for high-altitude supersonic testing.
+          </p>
+        </div>
+
+        <!-- Step 2 -->
+        <div class="relative p-6 rounded-xl bg-panel border border-slate-800 hover:border-slate-700 transition">
+          <div class="absolute -left-[43px] top-6 w-6 h-6 rounded-full bg-space border-2 border-x1amber flex items-center justify-center text-[10px] font-mono font-bold text-x1amber">2</div>
+          <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+            <h3 class="font-display text-xl font-bold text-white">Drop Launch & Sequential Rocket Ignition</h3>
+            <span class="font-mono text-xs px-2.5 py-1 rounded bg-slate-900 text-x1amber border border-slate-800">Thrust: 26.7 kN (4 Chambers)</span>
+          </div>
+          <p class="text-slate-300 text-sm sm:text-base leading-relaxed">
+            Released at 7,000 meters, Captain Charles "Chuck" Yeager ignited the four Reaction Motors XLR11 chambers in sequence. Burning liquid oxygen and a 75% ethyl alcohol / 25% water mixture, the X-1 climbed rapidly into thinner air where aerodynamic drag was dramatically lower.
+          </p>
+        </div>
+
+        <!-- Step 3 -->
+        <div class="relative p-6 rounded-xl bg-gradient-to-r from-panel to-orange-950/20 border border-x1orange/40">
+          <div class="absolute -left-[43px] top-6 w-6 h-6 rounded-full bg-x1orange text-space flex items-center justify-center text-[10px] font-mono font-bold">3</div>
+          <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+            <h3 class="font-display text-xl font-bold text-white">Breaking the Sound Barrier — Mach 1.06</h3>
+            <span class="font-mono text-xs px-2.5 py-1 rounded bg-x1orange/20 text-x1orange border border-x1orange/40">13,100 m · 1,127 km/h</span>
+          </div>
+          <p class="text-slate-200 text-sm sm:text-base leading-relaxed">
+            At 13,100 meters (43,000 ft), the Machmeter needle jumped smoothly past 1.0 to <strong class="text-white">Mach 1.06</strong>. Instead of disintegrating as popular myth predicted, the cockpit became remarkably quiet as the aircraft outran its own engine noise—generating the very first controlled supersonic boom heard across the Mojave Desert.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 5: INTERACTIVE ENGINEERING BLUEPRINT -->
+  <section id="sec-engineering" data-phase="05 · Engineering Blueprint" class="py-24 px-4 sm:px-6 border-t border-slate-800/70">
+    <div class="max-w-5xl mx-auto reveal">
+      <div class="font-mono text-xs text-x1orange uppercase tracking-widest mb-2">
+        05 // Technical Architecture
+      </div>
+      <h2 class="font-display text-3xl sm:text-4xl font-bold text-white mb-4">
+        How Engineers Solved the Transonic Challenge
+      </h2>
+      <p class="text-slate-400 text-sm sm:text-base mb-8">
+        Select any highlighted subsystem on the Bell X-1 schematic below to inspect the engineering breakthrough behind it.
+      </p>
+
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+        <!-- Blueprint Interactive Diagram -->
+        <div class="lg:col-span-7 rounded-2xl bg-[#08101e] border border-slate-800 p-5 sm:p-6 flex flex-col justify-between relative overflow-hidden">
+          <div class="flex justify-between items-center font-mono text-[11px] text-slate-400 mb-4">
+            <span>BELL X-1 STRUCTURAL &amp; AERODYNAMIC LAYOUT</span>
+            <span class="text-shockcyan">SIDE PROFILE</span>
+          </div>
+
+          <svg viewBox="0 0 640 260" class="w-full h-auto my-auto" aria-label="Bell X-1 Interactive Technical Blueprint">
+            <!-- Grid Lines -->
+            <g stroke="#1e293b" stroke-width="0.7">
+              <line x1="0" y1="130" x2="640" y2="130" stroke-dasharray="4 4" />
+              <line x1="160" y1="20" x2="160" y2="240" />
+              <line x1="320" y1="20" x2="320" y2="240" />
+              <line x1="480" y1="20" x2="480" y2="240" />
+            </g>
+
+            <!-- Fuselage Outline -->
+            <path d="M 110,112 L 290,104 Q 440,104 545,130 Q 440,156 290,156 L 110,148 Z" fill="#0f172a" stroke="#38bdf8" stroke-width="1.8" />
+            <!-- Internal Propellant Tanks -->
+            <rect x="235" y="114" width="65" height="32" rx="8" fill="#1e293b" stroke="#38bdf8" stroke-width="1" stroke-dasharray="3 2" />
+            <text x="267" y="133" text-anchor="middle" fill="#7dd3fc" font-family="JetBrains Mono" font-size="8">LOX TANK</text>
+
+            <rect x="310" y="114" width="68" height="32" rx="8" fill="#1e293b" stroke="#38bdf8" stroke-width="1" stroke-dasharray="3 2" />
+            <text x="344" y="133" text-anchor="middle" fill="#7dd3fc" font-family="JetBrains Mono" font-size="8">ALCOHOL/H2O</text>
+
+            <!-- XLR11 Rocket Engine -->
+            <rect x="115" y="116" width="55" height="28" rx="3" fill="#ff5722" fill-opacity="0.25" stroke="#ff5722" stroke-width="1.5" />
+            <polygon points="115,118 96,113 96,126 115,125" fill="#ff5722" />
+            <polygon points="115,135 96,134 96,147 115,142" fill="#ff5722" />
+
+            <!-- Vertical Fin -->
+            <polygon points="122,112 102,42 155,42 202,108" fill="#0f172a" stroke="#38bdf8" stroke-width="1.5" />
+            <!-- All-Moving Horizontal Stabilizer -->
+            <polygon points="125,126 88,122 88,136 150,134" fill="#ff5722" fill-opacity="0.4" stroke="#ff9800" stroke-width="1.8" />
+
+            <!-- Thin Airfoil Wing -->
+            <polygon points="275,134 248,182 302,182 355,134" fill="#0f172a" stroke="#38bdf8" stroke-width="1.6" />
+            <!-- Cockpit & Instrumentation -->
+            <path d="M 385,106 Q 435,106 472,115 L 395,116 Z" fill="#38bdf8" fill-opacity="0.25" stroke="#38bdf8" stroke-width="1.2" />
+            <!-- Nose Pitot Tube -->
+            <line x1="545" y1="130" x2="605" y2="130" stroke="#e2e8f0" stroke-width="2" />
+
+            <!-- Interactive Hotspots -->
+            <!-- 1: Bullet Fuselage -->
+            <g class="hotspot-btn cursor-pointer" data-part="fuselage">
+              <circle cx="495" cy="130" r="14" fill="#ff5722" fill-opacity="0.25" class="hotspot-pulse" />
+              <circle cx="495" cy="130" r="8" fill="#ff5722" stroke="#ffffff" stroke-width="2" />
+              <text x="495" y="133" text-anchor="middle" fill="#ffffff" font-family="JetBrains Mono" font-size="9" font-weight="bold">1</text>
+            </g>
+
+            <!-- 2: All-Moving Tailplane -->
+            <g class="hotspot-btn cursor-pointer" data-part="tailplane">
+              <circle cx="115" cy="129" r="14" fill="#ff5722" fill-opacity="0.25" class="hotspot-pulse" />
+              <circle cx="115" cy="129" r="8" fill="#ff5722" stroke="#ffffff" stroke-width="2" />
+              <text x="115" y="132" text-anchor="middle" fill="#ffffff" font-family="JetBrains Mono" font-size="9" font-weight="bold">2</text>
+            </g>
+
+            <!-- 3: Thin Wings -->
+            <g class="hotspot-btn cursor-pointer" data-part="wings">
+              <circle cx="292" cy="164" r="14" fill="#ff5722" fill-opacity="0.25" class="hotspot-pulse" />
+              <circle cx="292" cy="164" r="8" fill="#ff5722" stroke="#ffffff" stroke-width="2" />
+              <text x="292" y="167" text-anchor="middle" fill="#ffffff" font-family="JetBrains Mono" font-size="9" font-weight="bold">3</text>
+            </g>
+
+            <!-- 4: XLR11 Rocket Propulsion -->
+            <g class="hotspot-btn cursor-pointer" data-part="propulsion">
+              <circle cx="145" cy="130" r="14" fill="#ff5722" fill-opacity="0.25" class="hotspot-pulse" />
+              <circle cx="145" cy="130" r="8" fill="#ff5722" stroke="#ffffff" stroke-width="2" />
+              <text x="145" y="133" text-anchor="middle" fill="#ffffff" font-family="JetBrains Mono" font-size="9" font-weight="bold">4</text>
+            </g>
+          </svg>
+
+          <!-- Quick Selector Tabs -->
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4">
+            <button type="button" data-part="fuselage" class="part-tab px-2.5 py-2 rounded-lg font-mono text-xs bg-x1orange text-white font-semibold transition">01 · Nose &amp; Hull</button>
+            <button type="button" data-part="tailplane" class="part-tab px-2.5 py-2 rounded-lg font-mono text-xs bg-slate-900 text-slate-300 border border-slate-800 hover:border-slate-600 transition">02 · Flying Tail</button>
+            <button type="button" data-part="wings" class="part-tab px-2.5 py-2 rounded-lg font-mono text-xs bg-slate-900 text-slate-300 border border-slate-800 hover:border-slate-600 transition">03 · Thin Airfoil</button>
+            <button type="button" data-part="propulsion" class="part-tab px-2.5 py-2 rounded-lg font-mono text-xs bg-slate-900 text-slate-300 border border-slate-800 hover:border-slate-600 transition">04 · XLR11 Rocket</button>
+          </div>
+        </div>
+
+        <!-- Detail Inspector Panel -->
+        <div class="lg:col-span-5 rounded-2xl bg-panel border border-slate-800 p-6 sm:p-8 flex flex-col justify-between">
+          <div>
+            <div class="inline-block px-2.5 py-1 rounded bg-x1orange/15 text-x1orange font-mono text-xs mb-3" id="part-tag">
+              SUBSYSTEM 01 // AERODYNAMIC GEOMETRY
+            </div>
+            <h3 class="font-display text-2xl font-bold text-white mb-4" id="part-title">
+              .50-Caliber Bullet Fuselage
+            </h3>
+            <p class="text-slate-300 text-sm sm:text-base leading-relaxed mb-6" id="part-desc">
+              Ballistics engineers already knew that a .50-caliber Browning machine-gun bullet remained stable past the speed of sound. Bell engineers scaled up that exact ogive nose and cylindrical body (9.4 m long, 1.42 m diameter) to minimize supersonic wave drag and house 200 kg of NACA flight-test sensors.
+            </p>
+          </div>
+
+          <div class="p-4 rounded-xl bg-slate-950/90 border border-slate-800/90 space-y-2 font-mono text-xs">
+            <div class="flex justify-between">
+              <span class="text-slate-500">Key Parameter:</span>
+              <span class="text-shockcyan font-semibold" id="part-spec">Fineness Ratio ~ 6.6</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-slate-500">Problem Solved:</span>
+              <span class="text-slate-200" id="part-solved">Supersonic Wave Drag</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 6: CONTRIBUTION TO AERONAUTICS & LEGACY -->
+  <section id="sec-legacy" data-phase="06 · Legacy & Impact" class="py-24 px-4 sm:px-6 border-t border-slate-800/70 bg-slate-950/40">
+    <div class="max-w-5xl mx-auto reveal">
+      <div class="font-mono text-xs text-shockcyan uppercase tracking-widest mb-2">
+        06 // Contribution to Aeronautics &amp; Space
+      </div>
+      <h2 class="font-display text-3xl sm:text-4xl font-bold text-white mb-10">
+        Why the Bell X-1 Changed Aerospace Forever
+      </h2>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div class="p-6 rounded-2xl bg-panel border border-slate-800">
+          <div class="w-10 h-10 rounded-lg bg-x1orange/15 border border-x1orange/30 flex items-center justify-center font-mono text-x1orange font-bold mb-4">01</div>
+          <h3 class="font-display text-xl font-bold text-white mb-3">The All-Moving Tailplane Standard</h3>
+          <p class="text-slate-300 text-sm leading-relaxed">
+            The X-1 proved that pivoting the entire horizontal stabilizer solved transonic Mach tuck. This "flying tail" immediately became standard on supersonic fighters such as the F-86 Sabre, F-100 Super Sabre, and modern aircraft like the Dassault Rafale.
+          </p>
+        </div>
+
+        <div class="p-6 rounded-2xl bg-panel border border-slate-800">
+          <div class="w-10 h-10 rounded-lg bg-shockcyan/15 border border-shockcyan/30 flex items-center justify-center font-mono text-shockcyan font-bold mb-4">02</div>
+          <h3 class="font-display text-xl font-bold text-white mb-3">Slotted-Throat Wind Tunnels</h3>
+          <p class="text-slate-300 text-sm leading-relaxed">
+            Real flight data from the Bell X-1 allowed NACA engineer John Stack to validate the slotted-throat transonic wind tunnel in 1950, ending wind-tunnel choking and making accurate supersonic ground testing possible.
+          </p>
+        </div>
+
+        <div class="p-6 rounded-2xl bg-panel border border-slate-800">
+          <div class="w-10 h-10 rounded-lg bg-amber-500/15 border border-amber-500/30 flex items-center justify-center font-mono text-amber-400 font-bold mb-4">03</div>
+          <h3 class="font-display text-xl font-bold text-white mb-3">From X-Planes to Quiet Supersonics</h3>
+          <p class="text-slate-300 text-sm leading-relaxed">
+            The X-1 launched the X-Plane research lineage—leading to the hypersonic X-15 (Mach 6.7), Space Shuttle reentry aerodynamics, commercial Concorde flights, and modern low-boom aircraft like NASA's X-59 QueSST.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 7: SOURCES & ACKNOWLEDGMENTS -->
+  <section id="sec-sources" data-phase="07 · Sources" class="py-16 px-4 sm:px-6 border-t border-slate-800/70">
+    <div class="max-w-5xl mx-auto reveal">
+      <div class="font-mono text-xs text-slate-400 uppercase tracking-widest mb-2">
+        07 // Sources &amp; Acknowledgments
+      </div>
+      <h2 class="font-display text-2xl sm:text-3xl font-bold text-white mb-6">
+        References &amp; Tools Used
+      </h2>
+
+      <div class="p-6 rounded-2xl bg-panel/80 border border-slate-800 space-y-3 text-sm text-slate-300">
+        <ul class="space-y-2.5 list-disc list-inside">
+          <li>
+            <strong class="text-white">NASA History Division:</strong> <em>First Generation X-1</em> &amp; NACA High-Speed Flight Research Station Reports (Muroc Dry Lake, 1947).
+          </li>
+          <li>
+            <strong class="text-white">Smithsonian National Air and Space Museum:</strong> Technical specifications and archival documentation for the Bell X-1 <em>"Glamorous Glennis"</em>.
+          </li>
+          <li>
+            <strong class="text-white">Hallion, Richard P. (1997):</strong> <em>Supersonic Flight: Breaking the Sound Barrier and Beyond</em>, Brassey's.
+          </li>
+          <li>
+            <strong class="text-shockcyan">Format &amp; Animations:</strong> <strong>Google Gemini AI</strong> was used to format the webpage structure and create the interactive animations (scroll-linked telemetry HUD, Mach cone simulator, and engineering blueprint).
+          </li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER (Unchangeable Student Identity & School) -->
+  <footer class="py-10 px-4 sm:px-6 border-t border-slate-800/80 bg-space text-center">
+    <div class="max-w-5xl mx-auto flex flex-col items-center justify-center space-y-1">
+      <p class="font-display text-base font-semibold text-white tracking-wide">
+        Anthony Kamysz — Aero 1 Anglophone (TD02-TP01)
+      </p>
+      <p class="font-mono text-xs text-slate-400">
+        IPSA Paris — Campus Ivry-sur-Seine
+      </p>
+    </div>
+  </footer>
+
+  <script>
+    // 1. Scroll-Linked Telemetry HUD & Section Reveal
+    const hudAlt = document.getElementById('hud-alt');
+    const hudMach = document.getElementById('hud-mach');
+    const hudPhase = document.getElementById('hud-phase');
+    const scrollProgress = document.getElementById('scroll-progress');
+    const sections = document.querySelectorAll('section[data-phase]');
+
+    function updateTelemetryOnScroll() {
+      const scrollTop = window.scrollY;
+      const docHeight = document.documentElement.scrollHeight - window.innerHeight;
+      const fraction = docHeight > 0 ? Math.min(Math.max(scrollTop / docHeight, 0), 1) : 0;
+
+      scrollProgress.style.width = `${(fraction * 100).toFixed(1)}%`;
+
+      const altitudeMeters = Math.round(fraction * 13100);
+      const machSpeed = (fraction * 1.06).toFixed(2);
+      hudAlt.textContent = `${altitudeMeters.toLocaleString('en-US')} m`;
+      hudMach.textContent = `Mach ${machSpeed}`;
+
+      let currentPhase = '01 · Introduction';
+      sections.forEach((sec) => {
+        const rect = sec.getBoundingClientRect();
+        if (rect.top <= window.innerHeight * 0.45) {
+          currentPhase = sec.getAttribute('data-phase');
+        }
+      });
+      hudPhase.textContent = currentPhase;
+    }
+
+    window.addEventListener('scroll', updateTelemetryOnScroll, { passive: true });
+    updateTelemetryOnScroll();
+
+    // Intersection Observer for Smooth Reveal
+    const revealObserver = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('visible');
+        }
+      });
+    }, { threshold: 0.12 });
+
+    document.querySelectorAll('.reveal').forEach((el) => revealObserver.observe(el));
+
+    // 2. Web Audio API N-Wave Sonic Boom Synthesizer
+    let audioCtx = null;
+    let autoBoomEnabled = true;
+    let visualPulseAlpha = 0;
+
+    function triggerSonicBoomSound() {
+      try {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextClass) return;
+        if (!audioCtx) {
+          audioCtx = new AudioContextClass();
+        }
+        if (audioCtx.state === 'suspended') {
+          audioCtx.resume();
+        }
+
+        const now = audioCtx.currentTime;
+
+        // Low-frequency N-wave thump (Bow + Tail shock double impulse)
+        const osc = audioCtx.createOscillator();
+        const oscGain = audioCtx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(110, now);
+        osc.frequency.exponentialRampToValueAtTime(28, now + 0.35);
+
+        oscGain.gain.setValueAtTime(0.001, now);
+        oscGain.gain.linearRampToValueAtTime(0.45, now + 0.015);
+        oscGain.gain.exponentialRampToValueAtTime(0.04, now + 0.11);
+        oscGain.gain.linearRampToValueAtTime(0.38, now + 0.13);
+        oscGain.gain.exponentialRampToValueAtTime(0.001, now + 0.48);
+
+        // Acoustic air-crack noise burst
+        const bufferSize = Math.floor(audioCtx.sampleRate * 0.45);
+        const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+        const data = noiseBuffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (audioCtx.sampleRate * 0.12));
+        }
+
+        const noise = audioCtx.createBufferSource();
+        noise.buffer = noiseBuffer;
+
+        const filter = audioCtx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(420, now);
+        filter.frequency.exponentialRampToValueAtTime(85, now + 0.4);
+
+        const noiseGain = audioCtx.createGain();
+        noiseGain.gain.setValueAtTime(0.55, now);
+        noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+
+        osc.connect(oscGain);
+        oscGain.connect(audioCtx.destination);
+        noise.connect(filter);
+        filter.connect(noiseGain);
+        noiseGain.connect(audioCtx.destination);
+
+        osc.start(now);
+        osc.stop(now + 0.5);
+        noise.start(now);
+        noise.stop(now + 0.46);
+      } catch (e) {
+        // Fallback silently if browser blocks audio
+      }
+
+      // Visual shockwave pulse on canvas
+      visualPulseAlpha = 1.0;
+    }
+
+    const playBoomBtn = document.getElementById('play-boom-btn');
+    const audioToggleBtn = document.getElementById('audio-toggle-btn');
+    const audioStatusDot = document.getElementById('audio-status-dot');
+    const audioToggleText = document.getElementById('audio-toggle-text');
+
+    playBoomBtn.addEventListener('click', () => {
+      if (parseFloat(machSlider.value) < 1.0) {
+        machSlider.value = '1.06';
+        updateMachUI(1.06, false);
+      }
+      triggerSonicBoomSound();
+    });
+
+    audioToggleBtn.addEventListener('click', () => {
+      autoBoomEnabled = !autoBoomEnabled;
+      if (autoBoomEnabled) {
+        audioStatusDot.className = 'w-2 h-2 rounded-full bg-emerald-400';
+        audioToggleText.textContent = 'Auto-Boom: ON';
+      } else {
+        audioStatusDot.className = 'w-2 h-2 rounded-full bg-slate-500';
+        audioToggleText.textContent = 'Auto-Boom: OFF';
+      }
+    });
+
+    // 3. Interactive Mach Cone & Shockwave Canvas Simulation
+    const canvas = document.getElementById('shockwave-canvas');
+    const ctx = canvas.getContext('2d');
+    const machSlider = document.getElementById('mach-slider');
+    const simMachVal = document.getElementById('sim-mach-val');
+    const simRegimeBadge = document.getElementById('sim-regime-badge');
+    const simAngleVal = document.getElementById('sim-angle-val');
+    const simExplanation = document.getElementById('sim-explanation');
+
+    let currentMach = 0.85;
+    let wasSupersonic = false;
+    let waves = [];
+    let frameCount = 0;
+
+    function resizeCanvas() {
+      const rect = canvas.parentElement.getBoundingClientRect();
+      canvas.width = rect.width * window.devicePixelRatio;
+      canvas.height = rect.height * window.devicePixelRatio;
+      ctx.setTransform(window.devicePixelRatio, 0, 0, window.devicePixelRatio, 0, 0);
+    }
+
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    function updateMachUI(mach, allowAutoBoom = true) {
+      currentMach = mach;
+      simMachVal.textContent = `Mach ${mach.toFixed(2)}`;
+
+      if (mach < 0.98) {
+        simRegimeBadge.textContent = 'SUBSONIC REGIME';
+        simRegimeBadge.className = 'px-2.5 py-0.5 rounded text-xs font-bold bg-sky-500/20 text-sky-300 border border-sky-500/40';
+        simAngleVal.textContent = 'None (Subsonic)';
+        simExplanation.textContent = 'Pressure waves travel ahead of the aircraft; no sonic boom occurs.';
+        wasSupersonic = false;
+      } else if (mach >= 0.98 && mach <= 1.02) {
+        simRegimeBadge.textContent = 'TRANSONIC BARRIER';
+        simRegimeBadge.className = 'px-2.5 py-0.5 rounded text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40';
+        const angleDeg = (Math.asin(1 / Math.max(mach, 1)) * 180 / Math.PI).toFixed(1);
+        simAngleVal.textContent = `${angleDeg}° (Normal Shock)`;
+        simExplanation.textContent = 'Pressure waves pile up directly at the nose, creating intense compressibility drag.';
+        if (!wasSupersonic && mach >= 1.0) {
+          if (allowAutoBoom && autoBoomEnabled) triggerSonicBoomSound();
+          wasSupersonic = true;
+        }
+      } else {
+        simRegimeBadge.textContent = 'SUPERSONIC REGIME';
+        simRegimeBadge.className = 'px-2.5 py-0.5 rounded text-xs font-bold bg-orange-500/20 text-x1orange border border-orange-500/40';
+        const angleDeg = (Math.asin(1 / mach) * 180 / Math.PI).toFixed(1);
+        simAngleVal.textContent = `μ = ${angleDeg}°`;
+        simExplanation.textContent = 'Aircraft outruns its sound waves, trailing a conical shockwave (sonic boom).';
+        if (!wasSupersonic) {
+          if (allowAutoBoom && autoBoomEnabled) triggerSonicBoomSound();
+          wasSupersonic = true;
+        }
+      }
+    }
+
+    machSlider.addEventListener('input', (e) => {
+      updateMachUI(parseFloat(e.target.value), true);
+    });
+
+    function animateShockwaves() {
+      const width = canvas.width / window.devicePixelRatio;
+      const height = canvas.height / window.devicePixelRatio;
+
+      ctx.clearRect(0, 0, width, height);
+
+      // Ground Observer Reference Line
+      const groundY = height - 34;
+      ctx.strokeStyle = 'rgba(56, 189, 248, 0.25)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(0, groundY);
+      ctx.lineTo(width, groundY);
+      ctx.stroke();
+
+      ctx.fillStyle = '#64748b';
+      ctx.font = '10px "JetBrains Mono", monospace';
+      ctx.fillText('GROUND LEVEL // CLASSROOM OBSERVER', 16, groundY + 18);
+
+      const noseX = width * 0.68;
+      const noseY = height * 0.44;
+      const soundSpeedPx = 2.4;
+      const planeSpeedPx = currentMach * soundSpeedPx;
+
+      frameCount++;
+      if (frameCount % 7 === 0) {
+        waves.push({ x: noseX, y: noseY, r: 2, alpha: 0.75 });
+      }
+
+      for (let i = waves.length - 1; i >= 0; i--) {
+        const w = waves[i];
+        w.x -= planeSpeedPx;
+        w.r += soundSpeedPx;
+        w.alpha -= 0.0042;
+
+        if (w.alpha <= 0 || w.x + w.r < -50) {
+          waves.splice(i, 1);
+          continue;
+        }
+
+        ctx.beginPath();
+        ctx.arc(w.x, w.y, w.r, 0, Math.PI * 2);
+        ctx.strokeStyle = currentMach >= 1.0
+          ? `rgba(255, 110, 64, ${w.alpha * 0.65})`
+          : `rgba(56, 189, 248, ${w.alpha * 0.65})`;
+        ctx.lineWidth = 1.4;
+        ctx.stroke();
+      }
+
+      // Draw Theoretical Mach Cone Lines when Mach >= 1.0
+      if (currentMach >= 1.0) {
+        const mu = Math.asin(1 / currentMach);
+        const coneLen = width * 0.75;
+        const dx = coneLen * Math.cos(mu);
+        const dy = coneLen * Math.sin(mu);
+
+        ctx.save();
+        ctx.strokeStyle = '#ff5722';
+        ctx.lineWidth = 2.2;
+        ctx.shadowColor = '#ff5722';
+        ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.moveTo(noseX - dx, noseY - dy);
+        ctx.lineTo(noseX, noseY);
+        ctx.lineTo(noseX - dx, noseY + dy);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // Visual Sonic Boom Pulse Ring
+      if (visualPulseAlpha > 0) {
+        ctx.save();
+        ctx.strokeStyle = `rgba(255, 152, 0, ${visualPulseAlpha})`;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(noseX, noseY, (1 - visualPulseAlpha) * 260 + 15, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+        visualPulseAlpha = Math.max(0, visualPulseAlpha - 0.025);
+      }
+
+      // Draw Mini Bell X-1 Icon at (noseX, noseY)
+      ctx.save();
+      ctx.translate(noseX, noseY);
+      ctx.fillStyle = '#ff5722';
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(-22, -6);
+      ctx.lineTo(-46, -5);
+      ctx.lineTo(-46, 5);
+      ctx.lineTo(-22, 6);
+      ctx.closePath();
+      ctx.fill();
+
+      // Tail fin
+      ctx.beginPath();
+      ctx.moveTo(-38, -5);
+      ctx.lineTo(-46, -15);
+      ctx.lineTo(-48, -5);
+      ctx.closePath();
+      ctx.fill();
+
+      // Nose needle
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(10, 0);
+      ctx.stroke();
+      ctx.restore();
+
+      requestAnimationFrame(animateShockwaves);
+    }
+
+    animateShockwaves();
+
+    // 4. Interactive Engineering Blueprint Data
+    const partsData = {
+      fuselage: {
+        tag: 'SUBSYSTEM 01 // AERODYNAMIC GEOMETRY',
+        title: '.50-Caliber Bullet Fuselage',
+        desc: 'Ballistics engineers already knew that a .50-caliber Browning machine-gun bullet remained stable past the speed of sound. Bell engineers scaled up that exact ogive nose and cylindrical body (9.4 m long, 1.42 m diameter) to minimize supersonic wave drag and house 200 kg of NACA flight-test sensors.',
+        spec: 'Fineness Ratio ~ 6.6',
+        solved: 'Supersonic Wave Drag'
+      },
+      tailplane: {
+        tag: 'SUBSYSTEM 02 // FLIGHT CONTROL',
+        title: 'All-Moving Horizontal Stabilizer',
+        desc: 'Near Mach 1, shockwaves formed ahead of conventional elevator hinges, rendering standard pitch controls useless ("Mach tuck"). Bell installed a hydraulic jackscrew that tilted the entire horizontal tailplane by ±1 degree, restoring full pitch authority through the sound barrier.',
+        spec: 'Full-Span Trim (±1°)',
+        solved: 'Transonic Mach Tuck'
+      },
+      wings: {
+        tag: 'SUBSYSTEM 03 // WING AERODYNAMICS',
+        title: 'Ultra-Thin Unswept Airfoil (8% & 10%)',
+        desc: 'To delay shock-induced boundary-layer separation without the low-speed instability of early swept wings, Bell built two interchangeable straight wing sets with razor-thin 8% and 10% thickness-to-chord ratios, milled from solid high-strength aluminum alloy.',
+        spec: 't/c = 8% (NACA 65-108)',
+        solved: 'Shock-Induced Separation'
+      },
+      propulsion: {
+        tag: 'SUBSYSTEM 04 // ROCKET PROPULSION',
+        title: 'Reaction Motors XLR11 Engine',
+        desc: 'Because 1940s turbojets lacked the thrust-to-weight ratio needed for supersonic climb, the X-1 used a 4-chamber liquid-propellant rocket burning liquid oxygen and diluted ethyl alcohol (75% alcohol / 25% water for regenerative cooling), delivering 26.7 kN of thrust.',
+        spec: '26.7 kN (4 × 6.67 kN)',
+        solved: 'Transonic Drag Rise'
+      }
+    };
+
+    const partTag = document.getElementById('part-tag');
+    const partTitle = document.getElementById('part-title');
+    const partDesc = document.getElementById('part-desc');
+    const partSpec = document.getElementById('part-spec');
+    const partSolved = document.getElementById('part-solved');
+    const partTabs = document.querySelectorAll('.part-tab');
+    const hotspotBtns = document.querySelectorAll('.hotspot-btn');
+
+    function selectBlueprintPart(partKey) {
+      const data = partsData[partKey];
+      if (!data) return;
+
+      partTag.textContent = data.tag;
+      partTitle.textContent = data.title;
+      partDesc.textContent = data.desc;
+      partSpec.textContent = data.spec;
+      partSolved.textContent = data.solved;
+
+      partTabs.forEach((tab) => {
+        if (tab.getAttribute('data-part') === partKey) {
+          tab.className = 'part-tab px-2.5 py-2 rounded-lg font-mono text-xs bg-x1orange text-white font-semibold transition';
+        } else {
+          tab.className = 'part-tab px-2.5 py-2 rounded-lg font-mono text-xs bg-slate-900 text-slate-300 border border-slate-800 hover:border-slate-600 transition';
+        }
+      });
+    }
+
+    partTabs.forEach((tab) => {
+      tab.addEventListener('click', () => selectBlueprintPart(tab.getAttribute('data-part')));
+    });
+
+    hotspotBtns.forEach((spot) => {
+      spot.addEventListener('click', () => selectBlueprintPart(spot.getAttribute('data-part')));
+    });
+  </script>
+</body>
+</html>
